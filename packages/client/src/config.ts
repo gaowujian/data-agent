@@ -2,7 +2,7 @@
  * @Author: Andrew q
  * @Date: 2026-04-30 10:58:31
  * @LastEditors: Andrew q
- * @LastEditTime: 2026-04-30 18:26:49
+ * @LastEditTime: 2026-05-10 22:22:03
  * @Description: config
  */
 import { SILICONFLOW_BASE_URL } from '@data-agent/shared'
@@ -11,8 +11,7 @@ const SILICONFLOW_API_KEY_DEV = ''
 
 /** 与 SiliconFlow OpenAI 兼容接口共用的 Key（优先环境变量） */
 export function getSiliconflowApiKey(): string {
-  const fromEnv = process.env.SILICONFLOW_API_KEY?.trim()
-  return fromEnv && fromEnv.length > 0 ? fromEnv : SILICONFLOW_API_KEY_DEV
+  return SILICONFLOW_API_KEY_DEV
 }
 
 export { SILICONFLOW_BASE_URL }

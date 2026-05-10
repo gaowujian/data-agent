@@ -2,7 +2,7 @@
  * @Author: Andrew q
  * @Date: 2026-04-30 15:55:07
  * @LastEditors: Andrew q
- * @LastEditTime: 2026-04-30 18:09:15
+ * @LastEditTime: 2026-05-10 21:36:02
  * @Description: chat2
 -->
 <template>
@@ -10,7 +10,9 @@
     <section class="chat-card" aria-label="流式对话">
       <header class="chat-header">
         <h1 class="chat-title">Data Agent</h1>
-        <p class="chat-subtitle">TDesign Chatbot · 流式 SSE</p>
+        <p class="chat-subtitle">
+          TDesign Chatbot · 流式 SSE · 自定义 chart + ECharts（includeEchartDemo）
+        </p>
       </header>
 
       <div class="chat-bot-wrap">
@@ -23,12 +25,17 @@
           />
         </div>
         <t-chatbot
+          ref="chatbotRef"
           :chat-service-config="chatServiceConfig"
           :list-props="listProps"
           :sender-props="senderProps"
+          :message-props="messagePropsForChartSlots"
+          @chat-ready="onChatEngineReady"
+          @message-change="onMessageListChange"
         >
-          <template #input-prefix>
-            <div>11111</div>
+          <!-- 自定义渲染：插槽名为 `${messageId}-chart-${片段下标}`，与文档「自定义渲染」一致 -->
+          <template v-for="b in chartSlotBindings" :key="b.name" #[b.name]>
+            <TdesignChatChartSlot :option="b.option" />
           </template>
         </t-chatbot>
       </div>
@@ -37,13 +44,61 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
+import { Chatbot } from '@tdesign-vue-next/chat'
+import { ref, shallowRef } from 'vue'
 import type {
   AIMessageContent,
+  ChatMessagesData,
   ChatRequestParams,
   ChatServiceConfig,
+  SSEChunkData,
   TdChatSenderActionName,
 } from '@tdesign-vue-next/chat'
+import TdesignChatChartSlot from '@/components/TdesignChatChartSlot.vue'
+
+/** t-chatbot 将子插槽重命名为 `${messageId}-chart-${index}`，此处收集后动态绑定 */
+type ChartSlotBinding = { name: string; option: Record<string, unknown> | undefined }
+
+const chatbotRef = ref<InstanceType<typeof Chatbot> | null>(null)
+const chartSlotBindings = shallowRef<ChartSlotBinding[]>([])
+
+const collectChartSlotBindings = (messages: ChatMessagesData[]): ChartSlotBinding[] => {
+  const out: ChartSlotBinding[] = []
+  for (const msg of messages) {
+    if (msg.role !== 'assistant' || !Array.isArray(msg.content)) continue
+    msg.content.forEach((block, idx) => {
+      const typed = block as { type?: string; data?: unknown }
+      if (typed.type === 'chart') {
+        out.push({
+          name: `${msg.id}-chart-${idx}`,
+          option:
+            typed.data && typeof typed.data === 'object'
+              ? (typed.data as Record<string, unknown>)
+              : undefined,
+        })
+      }
+    })
+  }
+  return out
+}
+
+const onMessageListChange = (e: Event) => {
+  const detail = (e as CustomEvent<ChatMessagesData[]>).detail
+  chartSlotBindings.value = collectChartSlotBindings(detail ?? [])
+}
+
+/** 允许按内容片段挂 Vue 插槽（见 TDesign Chatbot 自定义渲染说明） */
+const messagePropsForChartSlots = (msg: ChatMessagesData) =>
+  msg.role === 'assistant' ? { allowContentSegmentCustom: true } : {}
+
+/** 引擎就绪后再注册自定义类型的流式合并策略 */
+const onChatEngineReady = () => {
+  const api = chatbotRef.value as unknown as {
+    registerMergeStrategy?: (type: string, fn: (chunk: unknown, existing?: unknown) => unknown) => void
+  }
+  // 自定义 chart：后端每次推完整 option，直接覆盖即可
+  api.registerMergeStrategy?.('chart', (chunk) => chunk)
+}
 
 const listProps = {
   autoScroll: true,
@@ -94,9 +149,46 @@ const handleFileRemove = (item: any) => {
 }
 
 const messages = ref<any[]>([])
+/** 当前轮助手流式文本累积，用于写入 messages 供下一轮请求 */
+const pendingAssistantText = ref('')
+
+/**
+ * 将后端 SSE 解析后的 chunk 转为 TDesign ChatEngine 可合并的 AIMessageContent。
+ * 与文档中 SSEChunkData + onMessage 约定一致，参见 TDesign Chat 文档。
+ */
+const sseChunkToAiContent = (chunk: SSEChunkData): AIMessageContent | null => {
+  if (chunk.event === 'error') {
+    const raw = chunk.data
+    const msg =
+      typeof raw === 'string'
+        ? raw
+        : raw &&
+            typeof raw === 'object' &&
+            'message' in (raw as object) &&
+            typeof (raw as { message?: unknown }).message === 'string'
+          ? (raw as { message: string }).message
+          : '请求失败'
+    return { type: 'markdown', data: `**错误**：${msg}`, status: 'error' }
+  }
+  const d = chunk.data
+  if (d && typeof d === 'object' && (d as { type?: unknown }).type === 'chart') {
+    // 扩展类型：引擎以插槽渲染，需在下方 registerMergeStrategy('chart', ...)
+    return d as AIMessageContent
+  }
+  if (
+    d &&
+    typeof d === 'object' &&
+    (d as { type?: unknown }).type === 'markdown' &&
+    typeof (d as { data?: unknown }).data === 'string'
+  ) {
+    return d as AIMessageContent
+  }
+  return null
+}
+
 const chatServiceConfig: ChatServiceConfig = {
-  endpoint: '/api/chat',
-  stream: false,
+  endpoint: '/api/chat/stream',
+  stream: true,
   onRequest: (params: ChatRequestParams) => {
     messages.value.push({
       role: 'user',
@@ -109,20 +201,44 @@ const chatServiceConfig: ChatServiceConfig = {
       body: JSON.stringify({
         messages: messages.value,
         fileId: filesList.value[0]?.fileId || undefined,
+        /** 为 true 时流结束后服务端追加一条 type=chart 的 SSE，演示 ECharts 自定义渲染 */
+        includeEchartDemo: true,
       }),
     }
   },
-  onComplete: (_aborted, _params, result): AIMessageContent | undefined => {
-    if (!result || typeof result !== 'object') return undefined
-    const r = result as { text?: string; error?: string }
-    if (typeof r.error === 'string' && r.error.trim()) {
-      return { type: 'markdown', data: `**错误**：${r.error}` }
+  /** 避免空 delta 过早进入 streaming（与引擎类型注释中的示例一致） */
+  isValidChunk: (chunk: SSEChunkData) => {
+    if (chunk.event === 'error') return true
+    const d = chunk.data
+    if (d && typeof d === 'object' && (d as { type?: unknown }).type === 'chart') {
+      return true
     }
-    messages.value.push({
-      role: 'assistant',
-      text: r.text ?? '',
-    })
-    return { type: 'markdown', data: r.text ?? '' }
+    if (d && typeof d === 'object' && typeof (d as { data?: unknown }).data === 'string') {
+      return (d as { data: string }).data.length > 0
+    }
+    return false
+  },
+  onMessage: (chunk: SSEChunkData): AIMessageContent | null => {
+    const content = sseChunkToAiContent(chunk)
+    if (content?.type === 'markdown' && typeof content.data === 'string') {
+      if (content.status === 'error') {
+        pendingAssistantText.value = ''
+      } else {
+        pendingAssistantText.value += content.data
+      }
+    }
+    // chart 块不参与纯文本 messages 累积
+    return content
+  },
+  /** 流式结束时引擎只传 isAborted 与请求参数，无第三个 JSON result */
+  onComplete: (aborted: boolean): void => {
+    if (!aborted && pendingAssistantText.value) {
+      messages.value.push({
+        role: 'assistant',
+        text: pendingAssistantText.value,
+      })
+    }
+    pendingAssistantText.value = ''
   },
 }
 </script>

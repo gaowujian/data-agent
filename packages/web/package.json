@@ -14,6 +14,7 @@
     "@element-plus/icons-vue": "^2.3.2",
     "@tdesign-vue-next/chat": "^0.5.2",
     "deep-chat": "^2.4.2",
+    "echarts": "^5.6.0",
     "element-plus": "^2.13.7",
     "vue": "^3.5.33",
     "vue-element-plus-x": "^2.0.0",

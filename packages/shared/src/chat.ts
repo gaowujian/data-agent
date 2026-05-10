@@ -99,6 +99,11 @@ export const deepChatRequestSchema = z
       }
       return coerceMessageText(v)
     }, z.string().optional()),
+    /**
+     * 为 true 时，流式结束后再推送一条 type=chart 的 SSE，便于联调自定义渲染（如 ECharts）。
+     * 生产环境可按业务条件传入。
+     */
+    includeEchartDemo: z.boolean().optional(),
   })
   .superRefine((data, ctx) => {
     const wantsRag =

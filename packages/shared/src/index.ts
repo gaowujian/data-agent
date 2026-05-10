@@ -1,3 +1,10 @@
+/*
+ * @Author: Andrew q
+ * @Date: 2026-04-29 17:25:54
+ * @LastEditors: Andrew q
+ * @LastEditTime: 2026-05-10 21:55:52
+ * @Description: index
+ */
 import { z } from 'zod'
 export const SILICONFLOW_BASE_URL = 'https://api.siliconflow.cn/v1'
 
@@ -8,4 +15,4 @@ export const envSchema = z.object({
   LLM_MODEL: z.string().default('deepseek-ai/DeepSeek-V3'),
 })
 
-export * from './chat.js'
+export * from './chat'

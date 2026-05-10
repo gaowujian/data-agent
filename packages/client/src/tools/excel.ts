@@ -1,6 +1,3 @@
-/**
- * Excel 解析工具：上传接口或后续 Agent 工具可复用。
- */
 import * as XLSX from 'xlsx'
 
 /** 单文件最大体积（字节） */

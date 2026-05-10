@@ -8,6 +8,7 @@
 import { Hono } from 'hono'
 import { cors } from 'hono/cors'
 import { zValidator } from '@hono/zod-validator'
+import { streamSSE, type SSEStreamingApi } from 'hono/streaming'
 import { createChatModel } from './agents/llm'
 import {
   createPendingFileRecord,
@@ -31,7 +32,8 @@ app.use(
   cors({
     origin: ['http://localhost:5173'],
     allowMethods: ['GET', 'POST', 'OPTIONS'],
-    allowHeaders: ['Content-Type'],
+    // 流式请求会带 Accept: text/event-stream
+    allowHeaders: ['Content-Type', 'Accept'],
   }),
 )
 
@@ -68,6 +70,58 @@ const getTextContent = (content: unknown) => {
   }
 
   return ''
+}
+
+/** 将 LLM 流式分片写入 TDesign ChatEngine 默认可解析的 SSE（event + JSON data） */
+const writeMarkdownDelta = async (sse: SSEStreamingApi, delta: string) => {
+  if (!delta) return
+  await sse.writeSSE({
+    event: 'message',
+    data: JSON.stringify({ type: 'markdown', data: delta } satisfies {
+      type: 'markdown'
+      data: string
+    }),
+  })
+}
+
+/** ECharts option：与前端自定义 type=chart 插槽约定一致（完整 JSON，一次写入） */
+const DEMO_ECHART_OPTION = {
+  title: { text: '示例：流式后的 chart 块', left: 'center' },
+  tooltip: { trigger: 'axis' },
+  xAxis: { type: 'category', data: ['Q1', 'Q2', 'Q3', 'Q4'] },
+  yAxis: { type: 'value', name: '数值' },
+  series: [
+    {
+      type: 'bar',
+      name: '销量',
+      data: [32, 58, 45, 71],
+      itemStyle: { color: '#0052d9' },
+    },
+  ],
+} as const
+
+const writeChartBlock = async (sse: SSEStreamingApi) => {
+  await sse.writeSSE({
+    event: 'message',
+    data: JSON.stringify({
+      type: 'chart',
+      data: DEMO_ECHART_OPTION,
+    }),
+  })
+}
+
+/** 将 LangChain 流迭代写入 SSE，支持客户端中止 */
+const streamModelToSse = async (
+  sse: SSEStreamingApi,
+  model: ReturnType<typeof createChatModel>,
+  lcMessages: [string, string][],
+  signal: AbortSignal,
+) => {
+  const stream = await model.stream(lcMessages, { signal })
+  for await (const chunk of stream) {
+    const delta = getTextContent(chunk.content)
+    await writeMarkdownDelta(sse, delta)
+  }
 }
 
 app.get('/api/files/:fileId', (c) => {
@@ -181,4 +235,80 @@ app.post('/api/chat', zValidator('json', deepChatRequestSchema), async (c) => {
     return c.json({ error: message }, 500)
   }
 })
+
+/**
+ * 流式对话（SSE），供 TDesign t-chatbot 在 chatServiceConfig.stream === true 时使用。
+ * 每条 data 为 JSON：{ "type": "markdown", "data": "<增量文本>" }；错误事件 event: error。
+ */
+app.post('/api/chat/stream', zValidator('json', deepChatRequestSchema), async (c) => {
+  const body = c.req.valid('json')
+  const { messages, includeEchartDemo } = body
+  const rag = resolveDeepChatRagFields(body)
+  const model = createChatModel()
+  const signal = c.req.raw.signal
+
+  if (rag) {
+    const { fileId, message: ragMessage } = rag
+    const rec = getFileRecord(fileId)
+    if (!rec) {
+      return c.json({ error: '未找到该 fileId，请先上传文件' }, 404)
+    }
+    if (rec.status === 'pending' || rec.status === 'processing') {
+      return c.json(
+        {
+          error:
+            '文件仍在解析或向量化中，请稍候通过 GET /api/files/:fileId 查询状态后再试',
+        },
+        409,
+      )
+    }
+    if (rec.status === 'failed') {
+      return c.json({ error: rec.error || '文件处理失败，无法问答' }, 400)
+    }
+
+    let snippets: string[] = []
+    try {
+      snippets = await retrieveTopChunksByQuery(fileId, ragMessage, RAG_TOP_K)
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'RAG 检索失败'
+      return c.json({ error: message }, 500)
+    }
+    const context =
+      snippets.length > 0 ? snippets.join('\n---\n') : '（暂无匹配片段）'
+    const userPrompt = `已知信息：${context}，请回答：${ragMessage}`
+
+    return streamSSE(c, async (sse) => {
+      try {
+        await streamModelToSse(sse, model, [['user', userPrompt]], signal)
+        if (includeEchartDemo && !signal.aborted) {
+          await writeChartBlock(sse)
+        }
+      } catch (error) {
+        if (signal.aborted) return
+        const message = error instanceof Error ? error.message : 'LLM 流式调用失败'
+        await sse.writeSSE({
+          event: 'error',
+          data: JSON.stringify({ message }),
+        })
+      }
+    })
+  }
+
+  return streamSSE(c, async (sse) => {
+    try {
+      await streamModelToSse(sse, model, toLangChainMessages(messages), signal)
+      if (includeEchartDemo && !signal.aborted) {
+        await writeChartBlock(sse)
+      }
+    } catch (error) {
+      if (signal.aborted) return
+      const message = error instanceof Error ? error.message : 'LLM 流式调用失败'
+      await sse.writeSSE({
+        event: 'error',
+        data: JSON.stringify({ message }),
+      })
+    }
+  })
+})
+
 export default app
