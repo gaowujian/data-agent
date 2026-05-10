@@ -23,12 +23,31 @@
           />
         </div>
         <t-chatbot
+          ref="chatRef"
           :chat-service-config="chatServiceConfig"
+          :message-props="messageProps"
           :list-props="listProps"
           :sender-props="senderProps"
+          @message-change="handleMessageChange"
         >
-          <template #input-prefix>
-            <div>11111</div>
+          <template v-for="msg in messages" :key="msg.id">
+            <template
+              v-for="(item, index) in msg.content"
+              :key="`${msg.id}-${item.type}-${index}`"
+            >
+              <div
+                v-if="item.type === 'chart'"
+                :slot="`${msg.id}-${item.type}-${index}`"
+                style="width: 600px; height: 400px"
+              >
+                <TvisionTcharts
+                  class="chart"
+                  :chart-type="item.data.chartType"
+                  :options="item.data.options"
+                  :theme="item.data.theme"
+                />
+              </div>
+            </template>
           </template>
         </t-chatbot>
       </div>
@@ -43,12 +62,32 @@ import type {
   ChatRequestParams,
   ChatServiceConfig,
   TdChatSenderActionName,
+  SSEChunkData,
+  AIContentChunkUpdate,
+  ChatMessagesData,
+  TdChatMessageConfig,
 } from '@tdesign-vue-next/chat'
+import TvisionTcharts from 'tvision-charts-vue-next'
+import { generateNanoId } from '@/utils/nanoId'
 
 const listProps = {
   autoScroll: true,
   defaultScrollTo: 'bottom' as const,
 }
+const messageProps: TdChatMessageConfig = {
+  user: {
+    variant: 'base',
+    placement: 'right',
+  },
+  assistant: {
+    placement: 'left',
+    chatContentProps: {
+      thinking: {
+        maxHeight: 100,
+      },
+    },
+  },
+};
 
 const files = ref<any[]>([])
 const filesList = ref<any[]>([])
@@ -95,36 +134,104 @@ const handleFileRemove = (item: any) => {
 
 const messages = ref<any[]>([])
 const chatServiceConfig: ChatServiceConfig = {
-  endpoint: '/api/chat',
-  stream: false,
-  onRequest: (params: ChatRequestParams) => {
-    messages.value.push({
-      role: 'user',
-      text: params.prompt ?? '',
-    })
+  // endpoint: '/api/chat',
+  // stream: false,
+  // onRequest: (params: ChatRequestParams) => {
+  //   messages.value.push({
+  //     role: 'user',
+  //     text: params.prompt ?? '',
+  //   })
 
+  //   return {
+  //     method: 'POST',
+  //     headers: { 'Content-Type': 'application/json' },
+  //     body: JSON.stringify({
+  //       messages: messages.value,
+  //       fileId: filesList.value[0]?.fileId || undefined,
+  //     }),
+  //   }
+  // },
+  endpoint: `https://1257786608-9i9j1kpa67.ap-guangzhou.tencentscf.com/sse/normal`,
+  stream: true,
+  onRequest: (innerParams: ChatRequestParams) => {
+    const { prompt } = innerParams;
     return {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'X-Requested-With': 'XMLHttpRequest',
+      },
       body: JSON.stringify({
-        messages: messages.value,
-        fileId: filesList.value[0]?.fileId || undefined,
+        uid: 'test',
+        prompt,
+        chart: true,
       }),
+    };
+  },
+  // 流式消息输出时的回调
+  onMessage: (chunk: SSEChunkData): AIContentChunkUpdate => {
+    const { type, ...rest } = chunk.data as any;
+    switch (type) {
+      // 正文
+      case 'text':
+        return {
+          type: 'markdown',
+          data: rest?.msg || '',
+          // 根据后端返回的paragraph字段来决定是否需要另起一段展示markdown
+          strategy: rest?.paragraph === 'next' ? 'append' : 'merge',
+        }
+      // 3、自定义渲染图表所需的数据结构
+      case 'chart':
+        return {
+          type: 'chart',
+          data: {
+            id: generateNanoId(),
+            ...chunk.data.content,
+          },
+          // 图表每次出现都是追加创建新的内容块
+          strategy: 'append',
+        }
+      default:
+        return {
+          type: 'markdown',
+          data: rest?.msg || '',
+        }
     }
   },
   onComplete: (_aborted, _params, result): AIMessageContent | undefined => {
-    if (!result || typeof result !== 'object') return undefined
-    const r = result as { text?: string; error?: string }
-    if (typeof r.error === 'string' && r.error.trim()) {
-      return { type: 'markdown', data: `**错误**：${r.error}` }
-    }
-    messages.value.push({
-      role: 'assistant',
-      text: r.text ?? '',
-    })
-    return { type: 'markdown', data: r.text ?? '' }
+    // if (!result || typeof result !== 'object') return undefined
+    // const r = result as { text?: string; error?: string }
+    // if (typeof r.error === 'string' && r.error.trim()) {
+    //   return { type: 'markdown', data: `**错误**：${r.error}` }
+    // }
+    // messages.value.push({
+    //   role: 'assistant',
+    //   text: r.text ?? '',
+    // })
+    // return { type: 'markdown', data: r.text ?? '' }
+    console.log('onComplete', _aborted, _params, result);
   },
 }
+
+const chatRef = ref<any>(null)
+// 消息变更处理
+const handleMessageChange = (e: CustomEvent<ChatMessagesData[]>) => {
+  messages.value = e.detail;
+  console.log(messages.value);
+
+  // 如果最后一条消息状态变为complete，强制更新视图
+  if (messages.value.length > 0) {
+    const lastMessage = messages.value[messages.value.length - 1];
+    if (lastMessage.role === 'assistant' && lastMessage.status === 'complete') {
+      console.log('update');
+      // 使用setTimeout确保所有DOM更新完成
+      setTimeout(() => {
+        // 强制更新组件
+        console.log(chatRef.value, 'chatRef.value');
+
+        chatRef.value?.$forceUpdate?.();
+      }, 0);
+    }
+  }
+};
 </script>
 
 <style scoped>
@@ -193,5 +300,10 @@ const chatServiceConfig: ChatServiceConfig = {
   width: 600px;
   max-width: 600px;
   z-index: 99;
+}
+
+.chart {
+  width: 600px;
+  height: 400px;
 }
 </style>
