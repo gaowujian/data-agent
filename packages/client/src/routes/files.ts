@@ -12,7 +12,7 @@ import {
   storeUploadedWorkbook,
   toWorkbookFileResponse,
 } from '../services/workbook-store'
-import { EXCEL_MAX_FILE_BYTES } from '../tools/excel'
+import { EXCEL_MAX_FILE_BYTES } from '../services/excel-parser'
 
 const XLSX_MIME =
   'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'

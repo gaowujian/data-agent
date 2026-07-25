@@ -5,7 +5,7 @@ import type {
   SpreadsheetCellEdit,
   WorkbookFileResponse,
 } from '@data-agent/shared'
-import { editXlsxCell, inspectXlsxPackage } from '../tools/xlsx-ooxml'
+import { editXlsxCell, inspectXlsxPackage } from './xlsx-ooxml'
 import {
   createWorkbookContext,
   type WorkbookContext,

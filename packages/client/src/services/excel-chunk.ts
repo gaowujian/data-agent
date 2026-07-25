@@ -1,4 +1,4 @@
-import type { ParsedExcelResult } from '../tools/excel'
+import type { ParsedExcelResult } from './excel-parser'
 
 /**
  * 单段文本最大字符数（需 ≤ 嵌入侧单条上限，否则易 413 / 超长）。

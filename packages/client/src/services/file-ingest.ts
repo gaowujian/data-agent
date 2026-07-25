@@ -1,4 +1,4 @@
-import { parseExcelBuffer } from '../tools/excel'
+import { parseExcelBuffer } from './excel-parser'
 import { chunkParsedExcelToTexts } from './excel-chunk'
 import { embedTexts } from './embeddings'
 

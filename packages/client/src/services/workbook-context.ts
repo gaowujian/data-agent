@@ -1,5 +1,5 @@
 import type { WorkbookSheetSummary } from '@data-agent/shared'
-import { parseExcelBuffer } from '../tools/excel'
+import { parseExcelBuffer } from './excel-parser'
 
 export const WORKBOOK_CONTEXT_SAMPLE_ROWS = 5
 
