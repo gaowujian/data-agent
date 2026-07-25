@@ -21,6 +21,7 @@
           ref="customSenderRef"
           @input-change="handleInputChange"
           @mention-change="handleMentionChange"
+          @send="handleSend"
         />
       </template>
       <!-- 自定义header区 -->

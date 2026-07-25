@@ -28,6 +28,7 @@ const props = withDefaults(
 const emit = defineEmits<{
   'input-change': [value: string]
   'mention-change': [payload: { isOpen: boolean; query: string }]
+  send: []
 }>()
 
 const editorHost = ref<HTMLElement>()
@@ -205,6 +206,21 @@ onMounted(() => {
 
         return { dom, ignoreMutation: () => true }
       }
+    },
+    handleKeyDown: (_view, event) => {
+      if (
+        event.key !== 'Enter' ||
+        event.shiftKey ||
+        event.isComposing ||
+        event.keyCode === 229
+      ) {
+        return false
+      }
+
+      event.preventDefault()
+      event.stopPropagation()
+      emit('send')
+      return true
     },
     dispatchTransaction: (transaction) => {
       const state = editorView.value?.state.apply(transaction)
