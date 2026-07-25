@@ -121,6 +121,7 @@ import {
 import {
   DATA_AGENT_KEY,
   chatStreamContentSchema,
+  deepChatResponseSchema,
   downloadArtifactSchema,
   type AgentSkill,
   type DownloadArtifact,
@@ -150,6 +151,8 @@ type StreamRequestMessage = {
   content: string;
 };
 
+type ChatService = "web-research" | "agent-stream" | "agent-batch";
+
 type UploadedAttachment = {
   name: string;
   size: number;
@@ -165,9 +168,11 @@ type ChatbotSenderProps = NonNullable<
 const props = withDefaults(
   defineProps<{
     skills?: AgentSkill[];
+    service?: ChatService;
   }>(),
   {
     skills: () => [],
+    service: "agent-stream",
   },
 );
 
@@ -432,27 +437,49 @@ function toStreamMessageContent(chunk: SSEChunkData): AIMessageContent {
 }
 
 const chatServiceConfig: ChatServiceConfig = {
-  endpoint: "/api/chat/stream/v2",
-  stream: true,
+  endpoint: {
+    "web-research": "/api/chat/stream/v2",
+    "agent-stream": "/api/chat/stream",
+    "agent-batch": "/api/chat",
+  }[props.service],
+  stream: props.service !== "agent-batch",
   onMessage: toStreamMessageContent,
   onRequest: (innerParams: ChatRequestParams) => {
     const prompt =
       typeof innerParams.prompt === "string" ? innerParams.prompt : "";
     const file = activeFile.value;
+    const messages = toStreamRequestMessages(prompt);
+    const skills = toSkillNames(innerParams.skills);
     return {
       headers: {
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({
-        key: file ? DATA_AGENT_KEY : undefined,
-        fileId: file?.fileId,
-        messages: toStreamRequestMessages(prompt),
-        skills: toSkillNames(innerParams.skills),
-      }),
+      body: JSON.stringify(
+        props.service === "agent-batch"
+          ? {
+              fileId: file?.fileId,
+              messages: messages.map(({ role, content }) => ({
+                role,
+                text: content,
+              })),
+              skills,
+            }
+          : {
+              key: file ? DATA_AGENT_KEY : undefined,
+              fileId: file?.fileId,
+              messages,
+              skills,
+            },
+      ),
     };
   },
-  onComplete: () => {
+  onComplete: (_isAborted, _params, result: unknown) => {
     isSending.value = false;
+    if (props.service !== "agent-batch") return;
+
+    const parsed = deepChatResponseSchema.safeParse(result);
+    if (!parsed.success) throw new Error("对话响应格式错误");
+    return { type: "markdown", data: parsed.data.text };
   },
   onError: (error) => {
     isSending.value = false;
