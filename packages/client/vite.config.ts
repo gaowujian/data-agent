@@ -13,8 +13,9 @@ export default defineConfig(({ mode }) => {
   const env = loadEnv(mode === 'development' ? 'dev' : mode, process.cwd(), [
     'SILICONFLOW_',
     'LLM_',
+    'BOCHA_',
   ])
-  for (const name of ['SILICONFLOW_API_KEY', 'LLM_MODEL'] as const) {
+  for (const name of ['SILICONFLOW_API_KEY', 'LLM_MODEL', 'BOCHA_API_KEY'] as const) {
     if (!process.env[name] && env[name]) process.env[name] = env[name]
   }
 
