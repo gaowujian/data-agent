@@ -7,11 +7,15 @@
  */
 import { SILICONFLOW_BASE_URL } from '@data-agent/shared'
 
-const SILICONFLOW_API_KEY_DEV = ''
-
 /** 与 SiliconFlow OpenAI 兼容接口共用的 Key（优先环境变量） */
 export function getSiliconflowApiKey(): string {
-  return SILICONFLOW_API_KEY_DEV
+  const apiKey = process.env.SILICONFLOW_API_KEY?.trim()
+  if (!apiKey) {
+    throw new Error(
+      '服务端未配置 SILICONFLOW_API_KEY，请在 packages/client/.env.dev 中配置后重启服务',
+    )
+  }
+  return apiKey
 }
 
 export { SILICONFLOW_BASE_URL }
@@ -26,4 +30,5 @@ export const SILICONFLOW_EMBED_BATCH_SIZE = 4
 export const SILICONFLOW_EMBED_MAX_CHARS_PER_TEXT = 1800
 
 /** 对话用 LLM（与 llm 模块保持一致时可单独改环境变量） */
-export const SILICONFLOW_LLM_MODEL = 'deepseek-ai/DeepSeek-V4-Flash'
+export const SILICONFLOW_LLM_MODEL =
+  process.env.LLM_MODEL?.trim() || 'deepseek-ai/DeepSeek-V4-Flash'

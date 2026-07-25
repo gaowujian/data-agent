@@ -1,4 +1,3 @@
-import { randomUUID } from 'node:crypto'
 import { parseExcelBuffer } from '../tools/excel'
 import { chunkParsedExcelToTexts } from './excel-chunk'
 import { embedTexts } from './embeddings'
@@ -18,6 +17,10 @@ export type FileIngestRecord = {
   error?: string
   /** 仅在 completed 时有值 */
   chunks?: VectorChunk[]
+  /** 当前已请求建立索引的工作簿版本 */
+  requestedVersion: number
+  /** chunks 对应的工作簿版本 */
+  indexedVersion?: number
   createdAt: number
   updatedAt: number
 }
@@ -28,13 +31,16 @@ function now() {
   return Date.now()
 }
 
-export function createPendingFileRecord(fileName?: string): FileIngestRecord {
-  const fileId = randomUUID()
+export function createPendingFileRecord(
+  fileId: string,
+  fileName?: string,
+): FileIngestRecord {
   const t = now()
   const rec: FileIngestRecord = {
     fileId,
     status: 'pending',
     fileName,
+    requestedVersion: 0,
     createdAt: t,
     updatedAt: t,
   }
@@ -73,7 +79,7 @@ export async function retrieveTopChunksByQuery(
   topK: number,
 ): Promise<string[]> {
   const rec = store.get(fileId)
-  if (!rec?.chunks?.length) return []
+  if (rec?.status !== 'completed' || !rec.chunks?.length) return []
 
   const [qVec] = await embedTexts([query])
   const scored = rec.chunks.map((c) => ({
@@ -88,13 +94,17 @@ export async function runIngestExcelJob(
   fileId: string,
   buffer: Buffer,
   fileName?: string,
+  version = 0,
 ): Promise<void> {
   const rec = store.get(fileId)
   if (!rec) {
     throw new Error('内部错误：记录不存在')
   }
 
+  if (version < rec.requestedVersion) return
+  rec.requestedVersion = version
   rec.status = 'processing'
+  rec.error = undefined
   touch(rec)
 
   try {
@@ -112,15 +122,23 @@ export async function runIngestExcelJob(
       throw new Error('向量化结果条数与文本块不一致')
     }
 
+    if (rec.requestedVersion !== version) return
     rec.chunks = texts.map((text, i) => ({ text, vector: vectors[i] }))
     rec.status = 'completed'
+    rec.indexedVersion = version
     rec.error = undefined
     touch(rec)
   } catch (e) {
+    if (rec.requestedVersion !== version) return
     rec.status = 'failed'
     rec.chunks = undefined
+    rec.indexedVersion = undefined
     rec.error = e instanceof Error ? e.message : '文件处理失败'
     touch(rec)
     throw e instanceof Error ? e : new Error(String(e))
   }
+}
+
+export function clearFileIngestStoreForTests(): void {
+  store.clear()
 }

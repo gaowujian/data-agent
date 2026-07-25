@@ -4,6 +4,7 @@
   "packageManager": "pnpm@10.33.2",
   "scripts": {
     "check-types": "pnpm -r run check-types",
+    "test": "pnpm -r --if-present test",
     "dev": "pnpm --parallel --filter @data-agent/client --filter @data-agent/web run dev",
     "dev:client": "pnpm --filter @data-agent/client dev",
     "dev:web": "pnpm --filter @data-agent/web dev",

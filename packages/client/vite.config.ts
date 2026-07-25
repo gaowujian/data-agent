@@ -7,17 +7,27 @@
  */
 import devServer from '@hono/vite-dev-server'
 import nodeAdapter from '@hono/vite-dev-server/node'
-import { defineConfig } from 'vite'
+import { defineConfig, loadEnv } from 'vite'
 
-export default defineConfig({
-  plugins: [
-    devServer({
-      entry: 'src/index.ts',
-      adapter: nodeAdapter,
-    }),
-  ],
-  server: {
-    port: 3001,
-    strictPort: true,
-  },
+export default defineConfig(({ mode }) => {
+  const env = loadEnv(mode === 'development' ? 'dev' : mode, process.cwd(), [
+    'SILICONFLOW_',
+    'LLM_',
+  ])
+  for (const name of ['SILICONFLOW_API_KEY', 'LLM_MODEL'] as const) {
+    if (!process.env[name] && env[name]) process.env[name] = env[name]
+  }
+
+  return {
+    plugins: [
+      devServer({
+        entry: 'src/index.ts',
+        adapter: nodeAdapter,
+      }),
+    ],
+    server: {
+      port: 3001,
+      strictPort: true,
+    },
+  }
 })

@@ -6,9 +6,18 @@ export const EXCEL_MAX_FILE_BYTES = 10 * 1024 * 1024
 /** 默认每个 sheet 最多返回的数据行数（不含表头逻辑行），防止超大表撑爆响应 */
 export const EXCEL_DEFAULT_MAX_ROWS = 5000
 
+/** 单个 sheet 最多暴露的表头数量，避免超宽工作表撑大响应或 Prompt。 */
+export const EXCEL_DEFAULT_MAX_HEADERS = 50
+
 export type ParsedExcelSheet = {
   /** 工作表名称 */
   name: string
+  /** 已受 maxHeaders 限制的非空表头 */
+  headers: string[]
+  /** 实际列数，以首行非空范围为准 */
+  columnCount: number
+  /** 是否因 maxHeaders 截断了表头 */
+  headersTruncated: boolean
   /** 首行作为列名的对象数组，便于前端展示或交给 LLM */
   rows: Record<string, unknown>[]
   /** 是否因 maxRows 被截断 */
@@ -30,6 +39,12 @@ function assertAllowedExcelName(fileName: string) {
   }
 }
 
+function normalizeHeader(value: unknown): string | undefined {
+  if (value == null) return undefined
+  const text = String(value).trim()
+  return text || undefined
+}
+
 /**
  * 从二进制缓冲区解析 Excel，默认只解析第一个工作表；可配置多表与行数上限。
  */
@@ -42,6 +57,7 @@ export function parseExcelBuffer(
     /** 为 true 时解析全部 sheet（注意响应体积） */
     allSheets?: boolean
     maxRowsPerSheet?: number
+    maxHeaders?: number
   } = {},
 ): ParsedExcelResult {
   const {
@@ -49,6 +65,7 @@ export function parseExcelBuffer(
     sheetIndex = 0,
     allSheets = false,
     maxRowsPerSheet = EXCEL_DEFAULT_MAX_ROWS,
+    maxHeaders = EXCEL_DEFAULT_MAX_HEADERS,
   } = options
 
   if (buffer.length === 0) {
@@ -83,6 +100,17 @@ export function parseExcelBuffer(
     const worksheet = workbook.Sheets[name]
     if (!worksheet) continue
 
+    const rawRows = XLSX.utils.sheet_to_json<unknown[]>(worksheet, {
+      header: 1,
+      defval: null,
+      raw: false,
+    })
+    const headerRow = rawRows[0] ?? []
+    const headerLabels = headerRow
+      .map(normalizeHeader)
+      .filter((header): header is string => Boolean(header))
+    const headers = headerLabels.slice(0, Math.max(1, maxHeaders))
+
     // 第一行作为对象键，空单元格为 null
     const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(worksheet, {
       defval: null,
@@ -95,6 +123,9 @@ export function parseExcelBuffer(
 
     sheets.push({
       name,
+      headers,
+      columnCount: headerRow.length,
+      headersTruncated: headerLabels.length > headers.length,
       rows: capped,
       truncated,
       totalRowCount,

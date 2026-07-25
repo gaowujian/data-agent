@@ -3,17 +3,12 @@ import { createRouter, createWebHistory, type RouteRecordRaw } from 'vue-router'
 const routes: RouteRecordRaw[] = [
   {
     path: '/',
-    redirect: '/chat2',
+    redirect: '/agent',
   },
   {
-    path: '/chat',
-    component: () => import('../views/chat/index.vue'),
-    name: 'Chat',
-  },
-  {
-    path: '/chat2',
-    component: () => import('../views/chat2/index.vue'),
-    name: 'Chat2',
+    path: '/agent',
+    component: () => import('../views/agent/index.vue'),
+    name: 'Agent',
   },
 ]
 

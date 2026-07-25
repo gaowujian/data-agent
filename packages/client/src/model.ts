@@ -1,14 +1,12 @@
-/*
- * @Author: Andrew q
- * @Date: 2026-04-29 18:53:35
- * @LastEditors: Andrew Q
- * @LastEditTime: 2026-07-20 21:16:38
- * @Description: llm
- */
 import { ChatOpenAI } from '@langchain/openai'
 import { SILICONFLOW_BASE_URL } from '@data-agent/shared'
-import { getSiliconflowApiKey } from '../config'
 
+const getSiliconflowApiKey = () => {
+  return (
+    process.env.SILICONFLOW_API_KEY ||
+    'sk-iahzakhugqhjumnujxnfyimeomzblgwuyqatdtxnblhgpznw'
+  )
+}
 export function createChatModel() {
   return new ChatOpenAI({
     apiKey: getSiliconflowApiKey(),

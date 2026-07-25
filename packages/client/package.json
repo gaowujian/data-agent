@@ -7,20 +7,32 @@
     "dev": "vite",
     "build": "tsc -p tsconfig.build.json",
     "start": "node --env-file=.env.dev dist/server.js",
-    "check-types": "tsc --noEmit -p tsconfig.json"
+    "check-types": "tsc --noEmit -p tsconfig.json",
+    "test": "vitest run"
   },
   "dependencies": {
     "@data-agent/shared": "workspace:*",
     "@hono/node-server": "^2.0.0",
     "@hono/zod-validator": "^0.7.6",
+    "@langchain/core": "^1.2.0",
+    "@langchain/langgraph": "^1.4.4",
+    "@langchain/langgraph-checkpoint": "^1.1.2",
+    "@langchain/langgraph-sdk": "^1.9.23",
     "@langchain/openai": "^1.4.5",
+    "deepagents": "^1.11.1",
+    "fflate": "^0.8.3",
     "hono": "^4.12.15",
-    "xlsx": "^0.18.5"
+    "langchain": "^1.5.0",
+    "langsmith": "^0.7.1",
+    "saxes": "^6.0.0",
+    "xlsx": "^0.18.5",
+    "zod": "^4.3.6"
   },
   "devDependencies": {
     "@hono/vite-dev-server": "^0.25.3",
     "@types/node": "catalog:",
     "typescript": "catalog:",
-    "vite": "catalog:"
+    "vite": "catalog:",
+    "vitest": "^4.1.10"
   }
 }
