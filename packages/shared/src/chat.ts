@@ -285,3 +285,64 @@ export const deepChatResponseSchema = z.object({
 export type DeepChatMessage = z.infer<typeof deepChatMessageSchema>
 export type DeepChatRequest = z.infer<typeof deepChatRequestSchema>
 export type DeepChatResponse = z.infer<typeof deepChatResponseSchema>
+
+const chatStreamInputMessageSchema = z
+  .object({
+    role: z.unknown().optional(),
+    content: z.unknown().optional(),
+    text: z.unknown().optional(),
+  })
+  .passthrough()
+
+export const chatStreamRequestSchema = z
+  .object({
+    key: z.unknown().optional(),
+    fileId: z.unknown().optional(),
+    message: z.unknown().optional(),
+    prompt: z.unknown().optional(),
+    messages: z.array(chatStreamInputMessageSchema).default([]),
+    includeEchartDemo: z.boolean().optional(),
+    skills: selectedAgentSkillsSchema,
+  })
+  .passthrough()
+  .transform((data) => {
+    const messages: Array<{
+      role: 'user' | 'assistant' | 'system'
+      content: string
+    }> = []
+    for (const item of data.messages) {
+      const content =
+        coerceMessageText(item.content) ?? coerceMessageText(item.text)
+      if (!content) continue
+
+      const role: 'user' | 'assistant' | 'system' =
+        item.role === 'assistant' || item.role === 'system'
+          ? item.role
+          : item.role === 'ai'
+            ? 'assistant'
+            : 'user'
+      messages.push({ role, content })
+    }
+    const message =
+      coerceMessageText(data.message) ??
+      coerceMessageText(data.prompt) ??
+      messages[messages.length - 1]?.content ??
+      ''
+
+    return {
+      key: coerceMessageText(data.key),
+      fileId: coerceMessageText(data.fileId) ?? '',
+      message,
+      messages:
+        messages.length > 0
+          ? messages
+          : message
+            ? [{ role: 'user' as const, content: message }]
+            : [],
+      includeEchartDemo: data.includeEchartDemo === true,
+      skills: data.skills,
+    }
+  })
+
+export type ChatStreamRequest = z.infer<typeof chatStreamRequestSchema>
+export type ChatStreamMessage = ChatStreamRequest['messages'][number]

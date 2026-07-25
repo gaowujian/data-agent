@@ -18,6 +18,16 @@ export function getSiliconflowApiKey(): string {
   return apiKey
 }
 
+export function getBochaApiKey(): string {
+  const apiKey = process.env.BOCHA_API_KEY?.trim()
+  if (!apiKey) {
+    throw new Error(
+      '服务端未配置 BOCHA_API_KEY，请在 packages/client/.env.dev 中配置后重启服务',
+    )
+  }
+  return apiKey
+}
+
 export { SILICONFLOW_BASE_URL }
 
 /** 表格向量化使用的嵌入模型（中文友好） */

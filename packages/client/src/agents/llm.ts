@@ -7,12 +7,12 @@
  */
 import { ChatOpenAI } from '@langchain/openai'
 import { SILICONFLOW_BASE_URL } from '@data-agent/shared'
-import { getSiliconflowApiKey } from '../config'
+import { getSiliconflowApiKey, SILICONFLOW_LLM_MODEL } from '../config'
 
 export function createChatModel() {
   return new ChatOpenAI({
     apiKey: getSiliconflowApiKey(),
-    model: 'deepseek-ai/DeepSeek-V4-Flash',
+    model: SILICONFLOW_LLM_MODEL,
     temperature: 0,
     configuration: {
       baseURL: SILICONFLOW_BASE_URL,

@@ -27,8 +27,9 @@
 packages/
 ├── client/
 │   └── src/
-│       ├── index.ts       # Hono 应用与 API 路由
+│       ├── index.ts       # Hono 应用组合与全局中间件
 │       ├── server.ts      # Node.js 生产启动入口
+│       ├── routes/        # 按资源拆分的 Hono 子应用
 │       ├── agents/        # Agent 与模型编排
 │       ├── tools/         # Agent/业务工具
 │       ├── services/      # 文件、向量化等服务
@@ -130,3 +131,17 @@ pnpm --filter @data-agent/shared add <package>
 - 未引入跨包反向依赖或重复的请求/响应类型。
 - 未提交构建产物、缓存或无关格式化改动。
 - 已说明实际执行的检查及未执行或被阻塞的验证。
+
+## Agent skills
+
+### Issue tracker
+
+Issues are tracked in GitHub repository `gaowujian/data-agent`. See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+Use the five default triage labels. See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Use the single-context layout. See `docs/agents/domain.md`.

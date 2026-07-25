@@ -125,7 +125,6 @@ import {
   type AgentSkill,
   type DownloadArtifact,
   type WorkbookFileResponse,
-  type WorkbookSheetSummary,
 } from "@data-agent/shared";
 
 import { Upload, Position } from "@element-plus/icons-vue";
@@ -318,25 +317,6 @@ function toErrorMessage(error: unknown, fallback: string): string {
   return error instanceof Error && error.message.trim()
     ? error.message
     : fallback;
-}
-
-function formatIndexStatus(
-  status: WorkbookFileResponse["indexStatus"],
-): string {
-  if (status === "completed") return "工作簿概要和详细索引已完成。";
-  if (status === "failed") return "工作簿概要已完成，详细索引失败。";
-  if (status === "processing") return "工作簿概要已完成，详细索引处理中。";
-  return "工作簿概要已完成，等待建立详细索引。";
-}
-
-function formatSheetSummary(sheet: WorkbookSheetSummary): string {
-  const visibleHeaders = sheet.headers.slice(0, 8).join("、");
-  const headerSuffix =
-    sheet.headers.length > 8 || sheet.headersTruncated ? "…" : "";
-  const headers = visibleHeaders
-    ? `；字段：${visibleHeaders}${headerSuffix}`
-    : "";
-  return `${sheet.name}：${sheet.rowCount} 行数据，${sheet.columnCount} 列${headers}`;
 }
 
 function isIndexing(status: WorkbookFileResponse["indexStatus"]): boolean {
